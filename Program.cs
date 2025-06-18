@@ -1,4 +1,8 @@
-﻿﻿using Microsoft.Extensions.Configuration;
+﻿
+
+﻿using System.ComponentModel.DataAnnotations;
+
+using Microsoft.Extensions.Configuration;
 
 using OpenAI.Embeddings;
 
@@ -45,21 +49,74 @@ string[] funnyAnimals =
  
 
 var responses = await client.GenerateEmbeddingsAsync(funnyAnimals);
+
 var vectorDatabase = responses.Value.Select(e => e.ToFloats()).ToArray();
 
-var userInput = "I love animals that are both funny and magical but they can not be evil";
-var userEmbedding = (await client.GenerateEmbeddingAsync(userInput)).Value.ToFloats();
  
+
+var userInput = "How many animals do we have in our database?";
+
+var userEmbedding = (await client.GenerateEmbeddingAsync(userInput)).Value.ToFloats();
+
+ 
+
 var sortedBySimilarity = vectorDatabase
+
     .Select((vector, index) => new { Index = index, Similarity = DotProduct(userEmbedding, vector) })
+
     .OrderByDescending(x => x.Similarity)
+
     .Take(3)
+
     .ToArray();
 
-foreach (var item in sortedBySimilarity)
+ 
+
+var responseClient = new OpenAIResponseClient("gpt-4.1", config["OPENAI_API_KEY"]);
+
+Console.WriteLine("----");
+
+var systemPrompt = $"""
+
+    You are an assistant that helps users answering questions about secret animals. Nobody
+
+    knows about these animals, except we in our company. Only use the information
+
+    provided in the following list of animals to answer the question. If you don't know
+
+    the answer, say you don't know. Never make up information. Always answer based
+
+    on the information provided in the list of animals.
+
+ 
+
+    <Animals>
+
+    {"<Animal>" + string.Join("</Animal>\n<Animal>", sortedBySimilarity.Select(x => funnyAnimals[x.Index])) + "</Animal>"}
+
+    </Animals>
+
+    """;
+
+Console.WriteLine(systemPrompt);
+
+ 
+
+var response = await responseClient.CreateResponseAsync(userInput, new()
+
 {
-    Console.WriteLine($"Similarity: {item.Similarity} | Funny Animal: {funnyAnimals[item.Index]}");
-}
+
+    Instructions = systemPrompt
+
+});
+
+ 
+
+Console.WriteLine("----");
+
+Console.WriteLine(response.Value.GetOutputText());
+
+ 
 
  
 
